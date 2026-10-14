@@ -13,9 +13,11 @@
   <!-- Header Application -->
   <header class="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-50">
     <div class="max-w-md mx-auto flex justify-between items-center">
-      <h1 class="text-xl font-bold">Pena PMI</h1>
+      <div class="flex items-center space-x-2">
+        <h1 class="text-xl font-bold">Pena PMI</h1>
+      </div>
       <div id="userHeaderInfo" class="flex items-center space-x-2">
-        <!-- Status Login / Tombol Keluar akan tampil di sini -->
+        <!-- Status Login / Tombol Keluar / Pesan -->
       </div>
     </div>
   </header>
@@ -30,7 +32,6 @@
       </div>
 
       <form id="authForm" onsubmit="handleAuth(event)" class="space-y-3">
-        <!-- Input Nama Lengkap (Khusus Pendaftaran) -->
         <div id="nameInputGroup" class="hidden">
           <label class="block text-xs font-medium text-gray-600 mb-1">Nama Lengkap</label>
           <input id="authName" type="text" placeholder="Masukkan nama Anda" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -54,14 +55,55 @@
 
     <!-- MAIN APP CONTAINER (Khusus Pengguna Login) -->
     <div id="appContainer" class="hidden space-y-4">
+      
+      <!-- NAVIGASI KOTAK PESAN (MODAL INBOX) -->
+      <div id="inboxModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-md p-4 space-y-3 max-h-[80vh] flex flex-col">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="font-bold text-gray-800">Pesan Pribadi</h3>
+            <button onclick="toggleInboxModal(false)" class="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+          </div>
+          
+          <!-- TAB INBOX / PERMINTAAN -->
+          <div class="flex border-b text-sm">
+            <button id="tabInbox" onclick="switchMsgTab('inbox')" class="flex-1 py-1.5 font-semibold text-blue-600 border-b-2 border-blue-600 text-center">Inbox</button>
+            <button id="tabRequests" onclick="switchMsgTab('request')" class="flex-1 py-1.5 font-semibold text-gray-400 text-center">Permintaan Pesan</button>
+          </div>
+
+          <!-- DAFTAR PESAN -->
+          <div id="messageList" class="flex-1 overflow-y-auto space-y-2 py-2">
+            <div class="text-center text-gray-400 text-xs py-4">Memuat pesan...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KOTAK CHAT INDIVIDUAL -->
+      <div id="chatModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-md p-4 space-y-3 max-h-[85vh] flex flex-col">
+          <div class="flex justify-between items-center border-b pb-2">
+            <div>
+              <h3 id="chatTargetName" class="font-bold text-gray-800 text-sm">Nama User</h3>
+              <p id="chatStatusInfo" class="text-xs text-gray-400"></p>
+            </div>
+            <button onclick="toggleChatModal(false)" class="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+          </div>
+
+          <!-- ISI PERCAKAPAN -->
+          <div id="chatMessages" class="flex-1 overflow-y-auto space-y-2 p-2 bg-gray-50 rounded-lg min-h-[200px]"></div>
+
+          <!-- INPUT PESAN -->
+          <form onsubmit="sendDirectMessage(event)" class="flex space-x-2 pt-2 border-t">
+            <input id="chatInput" type="text" placeholder="Tulis pesan..." required class="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Kirim</button>
+          </form>
+        </div>
+      </div>
+
       <!-- Form Kirim Postingan -->
       <div class="bg-white p-4 rounded-xl shadow border border-gray-200">
         <h2 class="font-semibold text-gray-700 mb-2">Bagikan Pengalaman Anda</h2>
-        
         <input id="userLocation" type="text" placeholder="Lokasi (misal: Hong Kong, Taiwan, dll)" class="w-full mb-2 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        
         <textarea id="postContent" rows="3" placeholder="Apa cerita atau pengalaman Anda hari ini?" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
-        
         <button onclick="submitPost()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm transition">
           Kirim Postingan
         </button>
@@ -75,7 +117,6 @@
 
   </main>
 
-  <!-- Skrip Logika Aplikasi -->
   <script>
     const SUPABASE_URL = 'https://glndsgfeygeeqxqwilyp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_uBKVsuHXQrExsj9GNKEOWQ_559pOp25';
@@ -84,8 +125,11 @@
 
     let currentMode = 'login';
     let currentUser = null;
+    let followingUserIds = [];
+    let currentChatTargetId = null;
+    let currentMsgTab = 'inbox';
 
-    // Ganti Tab Login / Register
+    // Switch Tab Auth
     function switchAuthTab(mode) {
       currentMode = mode;
       const nameGroup = document.getElementById('nameInputGroup');
@@ -106,7 +150,7 @@
       }
     }
 
-    // Tangani Pendaftaran & Login
+    // Handle Auth (Register / Login)
     async function handleAuth(event) {
       event.preventDefault();
       const email = document.getElementById('authEmail').value.trim();
@@ -114,42 +158,25 @@
       const name = document.getElementById('authName').value.trim();
 
       if (currentMode === 'register') {
-        if (!name) {
-          alert('Silakan isi Nama Lengkap Anda.');
-          return;
-        }
-        const { data, error } = await supabase.auth.signUp({
-          email: email,
-          password: password,
-          options: {
-            data: { full_name: name }
-          }
+        if (!name) return alert('Silakan isi Nama Lengkap Anda.');
+        const { error } = await supabase.auth.signUp({
+          email, password, options: { data: { full_name: name } }
         });
-
-        if (error) {
-          alert('Gagal Pendaftaran: ' + error.message);
-        } else {
-          alert('Pendaftaran Berhasil! Silakan masuk dengan akun Anda.');
+        if (error) alert('Gagal Pendaftaran: ' + error.message);
+        else {
+          alert('Pendaftaran Berhasil! Silakan masuk.');
           switchAuthTab('login');
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email,
-          password: password
-        });
-
-        if (error) {
-          alert('Gagal Login: ' + error.message);
-        } else {
-          checkSession();
-        }
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert('Gagal Login: ' + error.message);
+        else checkSession();
       }
     }
 
-    // Cek Status Login Pengguna
+    // Session Control
     async function checkSession() {
       const { data: { session } } = await supabase.auth.getSession();
-      
       const authContainer = document.getElementById('authContainer');
       const appContainer = document.getElementById('appContainer');
       const headerInfo = document.getElementById('userHeaderInfo');
@@ -162,10 +189,14 @@
         const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
 
         headerInfo.innerHTML = `
+          <button onclick="toggleInboxModal(true)" class="relative p-1 bg-blue-700 hover:bg-blue-800 rounded text-xs px-2 flex items-center space-x-1">
+            <span>📩 Pesan</span>
+          </button>
           <span class="text-xs text-blue-100">Halo, <b>${userName}</b></span>
           <button onclick="logout()" class="text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded transition">Keluar</button>
         `;
 
+        await loadFollows();
         fetchPosts();
       } else {
         currentUser = null;
@@ -175,87 +206,227 @@
       }
     }
 
-    // Fungsi Keluar (Logout)
     async function logout() {
       await supabase.auth.signOut();
       checkSession();
     }
 
-    // Mengambil Postingan Komunitas
-    async function fetchPosts() {
-      const feedEl = document.getElementById('postsFeed');
-      
-      const { data: posts, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        feedEl.innerHTML = '<div class="text-center text-red-500 text-sm py-4">Gagal memuat postingan.</div>';
-        return;
+    // Load Data Follow
+    async function loadFollows() {
+      if (!currentUser) return;
+      const { data } = await supabase.from('follows').select('following_id').eq('follower_id', currentUser.id);
+      if (data) {
+        followingUserIds = data.map(f => f.following_id);
       }
-
-      if (!posts || posts.length === 0) {
-        feedEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-4">Belum ada postingan. Jadilah yang pertama!</div>';
-        return;
-      }
-
-      feedEl.innerHTML = posts.map(post => `
-        <div class="bg-white p-4 rounded-xl shadow border border-gray-200 space-y-2">
-          <div class="flex items-center space-x-2">
-            <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
-              ${(post.user_name || 'U').charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p class="font-semibold text-sm leading-none">${post.user_name || 'Pengguna'}</p>
-              <p class="text-xs text-gray-400">${post.user_location || 'Lokasi tidak diisi'}</p>
-            </div>
-          </div>
-          <p class="text-sm text-gray-700">${post.content}</p>
-          <div class="text-xs text-gray-400 border-t pt-2">
-            ${new Date(post.created_at).toLocaleString('id-ID')}
-          </div>
-        </div>
-      `).join('');
     }
 
-    // Kirim Postingan Baru
+    // Toggle Follow / Unfollow
+    async function toggleFollow(targetUserId) {
+      if (!currentUser) return;
+      const isFollowing = followingUserIds.includes(targetUserId);
+
+      if (isFollowing) {
+        await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', targetUserId);
+        followingUserIds = followingUserIds.filter(id => id !== targetUserId);
+      } else {
+        await supabase.from('follows').insert([{ follower_id: currentUser.id, following_id: targetUserId }]);
+        followingUserIds.push(targetUserId);
+      }
+      fetchPosts();
+    }
+
+    // Fetch Feed
+    async function fetchPosts() {
+      const feedEl = document.getElementById('postsFeed');
+      const { data: posts, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
+
+      if (error || !posts || posts.length === 0) {
+        feedEl.innerHTML = '<div class="text-center text-gray-500 text-sm py-4">Belum ada postingan.</div>';
+        return;
+      }
+
+      feedEl.innerHTML = posts.map(post => {
+        const isSelf = currentUser && currentUser.id === post.user_id;
+        const isFollowing = followingUserIds.includes(post.user_id);
+
+        return `
+          <div class="bg-white p-4 rounded-xl shadow border border-gray-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
+                  ${(post.user_name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p class="font-semibold text-sm leading-none">${post.user_name || 'Pengguna'}</p>
+                  <p class="text-xs text-gray-400">${post.user_location || 'Lokasi tidak diisi'}</p>
+                </div>
+              </div>
+
+              ${!isSelf ? `
+                <div class="flex items-center space-x-1">
+                  <button onclick="toggleFollow('${post.user_id}')" class="text-xs px-2.5 py-1 rounded transition font-medium ${isFollowing ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}">
+                    ${isFollowing ? '✓ Mengikuti' : '+ Ikuti'}
+                  </button>
+                  <button onclick="openChatWith('${post.user_id}', '${post.user_name || 'Pengguna'}')" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded transition font-medium">
+                    💬 Pesan
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+
+            <p class="text-sm text-gray-700">${post.content}</p>
+            <div class="text-xs text-gray-400 border-t pt-2">
+              ${new Date(post.created_at).toLocaleString('id-ID')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Submit Post
     async function submitPost() {
       if (!currentUser) return;
-
       const location = document.getElementById('userLocation').value.trim();
       const content = document.getElementById('postContent').value.trim();
       const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
 
-      if (!content) {
-        alert('Silakan tuliskan cerita atau pengalaman Anda terlebih dahulu!');
-        return;
-      }
+      if (!content) return alert('Tuliskan cerita Anda terlebih dahulu!');
 
-      const { error } = await supabase
-        .from('posts')
-        .insert([
-          { 
-            user_id: currentUser.id,
-            user_name: userName, 
-            user_location: location || 'Umum', 
-            content: content 
-          }
-        ]);
+      const { error } = await supabase.from('posts').insert([{
+        user_id: currentUser.id, user_name: userName, user_location: location || 'Umum', content
+      }]);
 
-      if (error) {
-        alert('Gagal mengirim postingan: ' + error.message);
-      } else {
+      if (error) alert('Gagal kirim: ' + error.message);
+      else {
         document.getElementById('postContent').value = '';
         fetchPosts();
       }
     }
 
-    // Pantau Perubahan Sesi Login
-    supabase.auth.onAuthStateChange((event, session) => {
-      checkSession();
-    });
+    // Modal Inbox Control
+    function toggleInboxModal(show) {
+      document.getElementById('inboxModal').classList.toggle('hidden', !show);
+      if (show) loadMessagesList();
+    }
 
+    function switchMsgTab(tab) {
+      currentMsgTab = tab;
+      document.getElementById('tabInbox').className = `flex-1 py-1.5 font-semibold text-center ${tab === 'inbox' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`;
+      document.getElementById('tabRequests').className = `flex-1 py-1.5 font-semibold text-center ${tab === 'request' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`;
+      loadMessagesList();
+    }
+
+    // Load Messages List
+    async function loadMessagesList() {
+      const listEl = document.getElementById('messageList');
+      listEl.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">Memuat...</div>';
+
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+        .eq('status', currentMsgTab)
+        .order('created_at', { ascending: false });
+
+      if (error || !messages || messages.length === 0) {
+        listEl.innerHTML = `<div class="text-center text-gray-400 text-xs py-4">Tidak ada ${currentMsgTab === 'inbox' ? 'pesan masuk' : 'permintaan pesan'}.</div>`;
+        return;
+      }
+
+      // Grouping per user ID
+      const userMap = new Map();
+      messages.forEach(m => {
+        const otherId = m.sender_id === currentUser.id ? m.receiver_id : m.sender_id;
+        if (!userMap.has(otherId)) userMap.set(otherId, m);
+      });
+
+      listEl.innerHTML = Array.from(userMap.entries()).map(([otherId, m]) => `
+        <div onclick="openChatWith('${otherId}', 'Pengguna')" class="p-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer flex justify-between items-center transition border">
+          <div>
+            <p class="font-semibold text-xs text-gray-800">Pengguna (ID: ${otherId.substring(0, 6)}...)</p>
+            <p class="text-xs text-gray-500 truncate max-w-[200px]">${m.content}</p>
+          </div>
+          <span class="text-[10px] text-gray-400">${new Date(m.created_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span>
+        </div>
+      `).join('');
+    }
+
+    // Modal Chat Control
+    async function openChatWith(targetId, targetName) {
+      currentChatTargetId = targetId;
+      document.getElementById('chatTargetName').innerText = targetName;
+      toggleInboxModal(false);
+      toggleChatModal(true);
+      loadChatHistory();
+    }
+
+    function toggleChatModal(show) {
+      document.getElementById('chatModal').classList.toggle('hidden', !show);
+    }
+
+    // Load Chat History
+    async function loadChatHistory() {
+      if (!currentChatTargetId || !currentUser) return;
+      const chatEl = document.getElementById('chatMessages');
+
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${currentChatTargetId}),and(sender_id.eq.${currentChatTargetId},receiver_id.eq.${currentUser.id})`)
+        .order('created_at', { ascending: true });
+
+      if (!msgs || msgs.length === 0) {
+        chatEl.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">Belum ada obrolan.</div>';
+        return;
+      }
+
+      chatEl.innerHTML = msgs.map(m => {
+        const isMe = m.sender_id === currentUser.id;
+        return `
+          <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+            <div class="max-w-[75%] p-2 rounded-xl text-xs ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border text-gray-800 rounded-bl-none'}">
+              <p>${m.content}</p>
+              <span class="text-[9px] ${isMe ? 'text-blue-200' : 'text-gray-400'} block text-right mt-1">${new Date(m.created_at).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    // Kirim Pesan Pribadi (Cek Saling Follow)
+    async function sendDirectMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('chatInput');
+      const content = input.value.trim();
+      if (!content || !currentChatTargetId || !currentUser) return;
+
+      // Cek apakah target mem-follow saya juga (Saling Follow)
+      const { data: targetFollowsMe } = await supabase
+        .from('follows')
+        .select('*')
+        .eq('follower_id', currentChatTargetId)
+        .eq('following_id', currentUser.id);
+
+      const isMutual = targetFollowsMe && targetFollowsMe.length > 0;
+      const msgStatus = isMutual ? 'inbox' : 'request';
+
+      const { error } = await supabase.from('messages').insert([{
+        sender_id: currentUser.id,
+        receiver_id: currentChatTargetId,
+        content: content,
+        status: msgStatus
+      }]);
+
+      if (error) alert('Gagal mengirim pesan: ' + error.message);
+      else {
+        input.value = '';
+        loadChatHistory();
+      }
+    }
+
+    supabase.auth.onAuthStateChange(() => checkSession());
     document.addEventListener('DOMContentLoaded', checkSession);
   </script>
 </body>
