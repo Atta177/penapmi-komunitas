@@ -146,6 +146,7 @@
       }
     }
 
+    // TANGANI AUTENTIKASI DENGAN KEAMANAN KETAT
     async function handleAuth(event) {
       event.preventDefault();
       const email = document.getElementById('authEmail').value.trim();
@@ -157,15 +158,27 @@
         const { error } = await supabase.auth.signUp({
           email, password, options: { data: { full_name: name } }
         });
-        if (error) alert('Gagal Pendaftaran: ' + error.message);
-        else {
-          alert('Pendaftaran Berhasil! Silakan masuk.');
+        if (error) {
+          alert('Gagal Pendaftaran: ' + error.message);
+        } else {
+          alert('Pendaftaran Berhasil! Silakan masuk dengan email dan password Anda.');
           switchAuthTab('login');
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert('Gagal Login: ' + error.message);
-        else checkSession();
+        // Keluar dari sesi aktif sebelumnya secara penuh
+        await supabase.auth.signOut();
+
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          alert('Gagal Login: Email atau kata sandi Anda salah!');
+          currentUser = null;
+          document.getElementById('authContainer').classList.remove('hidden');
+          document.getElementById('appContainer').classList.add('hidden');
+          return; // Hentikan alur, jangan teruskan ke checkSession
+        }
+
+        checkSession();
       }
     }
 
@@ -274,15 +287,12 @@
               </button>
             </div>
 
-            <!-- KOMENTAR CONTAINER -->
             <div id="commentsSection-${post.id}" class="hidden pt-3 border-t mt-2 space-y-3">
-              <!-- Form Komentar Utama -->
               <div class="flex space-x-2">
                 <input id="commentInput-${post.id}" type="text" placeholder="Tulis komentar..." class="flex-1 p-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
                 <button onclick="submitComment('${post.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium">Kirim</button>
               </div>
 
-              <!-- Daftar Komentar -->
               <div id="commentsList-${post.id}" class="space-y-2 text-xs">
                 <p class="text-gray-400 text-center py-1">Memuat komentar...</p>
               </div>
@@ -297,7 +307,6 @@
       }
     }
 
-    // Toggle Section Komentar
     async function toggleComments(postId, forceOpen = false) {
       const section = document.getElementById(`commentsSection-${postId}`);
       if (!section) return;
@@ -313,7 +322,6 @@
       }
     }
 
-    // Load Data Komentar & Balasan
     async function loadComments(postId) {
       const listEl = document.getElementById(`commentsList-${postId}`);
       if (!listEl) return;
@@ -329,7 +337,6 @@
         return;
       }
 
-      // Pisahkan komentar utama dan balasan
       const mainComments = comments.filter(c => !c.parent_id);
       const repliesMap = new Map();
 
@@ -351,13 +358,11 @@
             
             <button onclick="showReplyForm('${c.id}')" class="text-[11px] text-blue-600 font-medium hover:underline">↪️ Balas</button>
 
-            <!-- Form Balasan (Hidden Default) -->
             <div id="replyForm-${c.id}" class="hidden pt-2 flex space-x-2">
               <input id="replyInput-${c.id}" type="text" placeholder="Balas ${c.user_name}..." class="flex-1 p-1.5 border border-gray-300 rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500">
               <button onclick="submitReply('${postId}', '${c.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 rounded text-[11px] font-medium">Kirim</button>
             </div>
 
-            <!-- Daftar Balasan -->
             ${replies.length > 0 ? `
               <div class="pl-3 border-l-2 border-blue-200 mt-2 space-y-2">
                 ${replies.map(r => `
@@ -381,7 +386,6 @@
       if (form) form.classList.toggle('hidden');
     }
 
-    // Submit Komentar Utama
     async function submitComment(postId) {
       if (!currentUser) return;
       const input = document.getElementById(`commentInput-${postId}`);
@@ -405,7 +409,6 @@
       }
     }
 
-    // Submit Balasan Komentar
     async function submitReply(postId, parentCommentId) {
       if (!currentUser) return;
       const input = document.getElementById(`replyInput-${parentCommentId}`);
@@ -564,7 +567,6 @@
       }
     }
 
-    supabase.auth.onAuthStateChange(() => checkSession());
     document.addEventListener('DOMContentLoaded', checkSession);
   </script>
 </body>
