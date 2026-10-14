@@ -14,43 +14,174 @@
   <header class="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-50">
     <div class="max-w-md mx-auto flex justify-between items-center">
       <h1 class="text-xl font-bold">Pena PMI</h1>
-      <span class="text-xs bg-blue-700 px-2 py-1 rounded">Komunitas</span>
+      <div id="userHeaderInfo" class="flex items-center space-x-2">
+        <!-- Status Login / Tombol Keluar akan tampil di sini -->
+      </div>
     </div>
   </header>
 
   <main class="max-w-md mx-auto p-4 space-y-4 pb-20">
 
-    <!-- Form Kirim Postingan Baru -->
-    <div class="bg-white p-4 rounded-xl shadow border border-gray-200">
-      <h2 class="font-semibold text-gray-700 mb-2">Bagikan Pengalaman Anda</h2>
-      
-      <input id="userName" type="text" placeholder="Nama Anda" class="w-full mb-2 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-      
-      <input id="userLocation" type="text" placeholder="Lokasi (misal: Hong Kong, Taiwan, dll)" class="w-full mb-2 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-      
-      <textarea id="postContent" rows="3" placeholder="Apa cerita atau pengalaman Anda hari ini?" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
-      
-      <button onclick="submitPost()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm transition">
-        Kirim Postingan
-      </button>
+    <!-- FORM AUTENTIKASI (Daftar / Login) -->
+    <div id="authContainer" class="bg-white p-6 rounded-xl shadow border border-gray-200">
+      <div class="flex justify-around mb-4 border-b pb-2">
+        <button id="tabLoginBtn" onclick="switchAuthTab('login')" class="font-semibold text-blue-600 border-b-2 border-blue-600 pb-1">Masuk</button>
+        <button id="tabRegisterBtn" onclick="switchAuthTab('register')" class="font-semibold text-gray-400 pb-1">Daftar Akun</button>
+      </div>
+
+      <form id="authForm" onsubmit="handleAuth(event)" class="space-y-3">
+        <!-- Input Nama Lengkap (Khusus Pendaftaran) -->
+        <div id="nameInputGroup" class="hidden">
+          <label class="block text-xs font-medium text-gray-600 mb-1">Nama Lengkap</label>
+          <input id="authName" type="text" placeholder="Masukkan nama Anda" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Email</label>
+          <input id="authEmail" type="email" required placeholder="nama@email.com" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Kata Sandi</label>
+          <input id="authPassword" type="password" required placeholder="Minimal 6 karakter" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <button type="submit" id="authSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm transition">
+          Masuk Akun
+        </button>
+      </form>
     </div>
 
-    <!-- Feed Postingan -->
-    <div id="postsFeed" class="space-y-4">
-      <div class="text-center text-gray-500 text-sm py-4">Memuat postingan...</div>
+    <!-- MAIN APP CONTAINER (Khusus Pengguna Login) -->
+    <div id="appContainer" class="hidden space-y-4">
+      <!-- Form Kirim Postingan -->
+      <div class="bg-white p-4 rounded-xl shadow border border-gray-200">
+        <h2 class="font-semibold text-gray-700 mb-2">Bagikan Pengalaman Anda</h2>
+        
+        <input id="userLocation" type="text" placeholder="Lokasi (misal: Hong Kong, Taiwan, dll)" class="w-full mb-2 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        
+        <textarea id="postContent" rows="3" placeholder="Apa cerita atau pengalaman Anda hari ini?" class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
+        
+        <button onclick="submitPost()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg text-sm transition">
+          Kirim Postingan
+        </button>
+      </div>
+
+      <!-- Feed Postingan -->
+      <div id="postsFeed" class="space-y-4">
+        <div class="text-center text-gray-500 text-sm py-4">Memuat postingan...</div>
+      </div>
     </div>
 
   </main>
 
-  <!-- Skrip Integrasi Supabase -->
+  <!-- Skrip Logika Aplikasi -->
   <script>
-    // Konfigurasi Supabase Anda
     const SUPABASE_URL = 'https://glndsgfeygeeqxqwilyp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_uBKVsuHXQrExsj9GNKEOWQ_559pOp25';
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Fungsi Mengambil Data Postingan dari Database
+    let currentMode = 'login';
+    let currentUser = null;
+
+    // Ganti Tab Login / Register
+    function switchAuthTab(mode) {
+      currentMode = mode;
+      const nameGroup = document.getElementById('nameInputGroup');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const tabLogin = document.getElementById('tabLoginBtn');
+      const tabRegister = document.getElementById('tabRegisterBtn');
+
+      if (mode === 'register') {
+        nameGroup.classList.remove('hidden');
+        submitBtn.innerText = 'Daftar Akun Baru';
+        tabRegister.className = 'font-semibold text-blue-600 border-b-2 border-blue-600 pb-1';
+        tabLogin.className = 'font-semibold text-gray-400 pb-1';
+      } else {
+        nameGroup.classList.add('hidden');
+        submitBtn.innerText = 'Masuk Akun';
+        tabLogin.className = 'font-semibold text-blue-600 border-b-2 border-blue-600 pb-1';
+        tabRegister.className = 'font-semibold text-gray-400 pb-1';
+      }
+    }
+
+    // Tangani Pendaftaran & Login
+    async function handleAuth(event) {
+      event.preventDefault();
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      const name = document.getElementById('authName').value.trim();
+
+      if (currentMode === 'register') {
+        if (!name) {
+          alert('Silakan isi Nama Lengkap Anda.');
+          return;
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: email,
+          password: password,
+          options: {
+            data: { full_name: name }
+          }
+        });
+
+        if (error) {
+          alert('Gagal Pendaftaran: ' + error.message);
+        } else {
+          alert('Pendaftaran Berhasil! Silakan masuk dengan akun Anda.');
+          switchAuthTab('login');
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) {
+          alert('Gagal Login: ' + error.message);
+        } else {
+          checkSession();
+        }
+      }
+    }
+
+    // Cek Status Login Pengguna
+    async function checkSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const authContainer = document.getElementById('authContainer');
+      const appContainer = document.getElementById('appContainer');
+      const headerInfo = document.getElementById('userHeaderInfo');
+
+      if (session) {
+        currentUser = session.user;
+        authContainer.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+
+        const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+
+        headerInfo.innerHTML = `
+          <span class="text-xs text-blue-100">Halo, <b>${userName}</b></span>
+          <button onclick="logout()" class="text-xs bg-red-500 hover:bg-red-600 px-2 py-1 rounded transition">Keluar</button>
+        `;
+
+        fetchPosts();
+      } else {
+        currentUser = null;
+        authContainer.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+        headerInfo.innerHTML = '';
+      }
+    }
+
+    // Fungsi Keluar (Logout)
+    async function logout() {
+      await supabase.auth.signOut();
+      checkSession();
+    }
+
+    // Mengambil Postingan Komunitas
     async function fetchPosts() {
       const feedEl = document.getElementById('postsFeed');
       
@@ -60,7 +191,6 @@
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Gagal mengambil data:', error);
         feedEl.innerHTML = '<div class="text-center text-red-500 text-sm py-4">Gagal memuat postingan.</div>';
         return;
       }
@@ -89,22 +219,25 @@
       `).join('');
     }
 
-    // Fungsi Mengirim Postingan Baru ke Database
+    // Kirim Postingan Baru
     async function submitPost() {
-      const name = document.getElementById('userName').value.trim();
+      if (!currentUser) return;
+
       const location = document.getElementById('userLocation').value.trim();
       const content = document.getElementById('postContent').value.trim();
+      const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
 
-      if (!name || !content) {
-        alert('Silakan isi Nama dan Isian Postingan terlebih dahulu!');
+      if (!content) {
+        alert('Silakan tuliskan cerita atau pengalaman Anda terlebih dahulu!');
         return;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('posts')
         .insert([
           { 
-            user_name: name, 
+            user_id: currentUser.id,
+            user_name: userName, 
             user_location: location || 'Umum', 
             content: content 
           }
@@ -118,8 +251,12 @@
       }
     }
 
-    // Jalankan otomatis saat halaman selesai dimuat
-    document.addEventListener('DOMContentLoaded', fetchPosts);
+    // Pantau Perubahan Sesi Login
+    supabase.auth.onAuthStateChange((event, session) => {
+      checkSession();
+    });
+
+    document.addEventListener('DOMContentLoaded', checkSession);
   </script>
 </body>
 </html>
